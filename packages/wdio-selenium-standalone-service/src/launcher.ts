@@ -67,9 +67,12 @@ export default class SeleniumStandaloneLauncher {
     }
 
     async onPrepare(config: Options.Testrunner): Promise<void> {
+        console.info('Prepare Selenium Standalone')
+
         this.watchMode = Boolean(config.watch)
 
         if (!this.skipSeleniumInstall) {
+            console.info('Installing Selenium')
             await SeleniumStandalone.install(this.installArgs).catch(this.handleSeleniumError)
         }
 
@@ -118,6 +121,7 @@ export default class SeleniumStandaloneLauncher {
         /**
          * start Selenium Standalone server
          */
+        console.info('start Selenium Standalone')
         const start = SeleniumStandalone.start(this.args)
         start.catch(this.handleSeleniumError)
         this.process = await start
@@ -154,6 +158,7 @@ export default class SeleniumStandaloneLauncher {
     _stopProcess = (): void => {
         if (this.process) {
             log.info('shutting down all browsers')
+            console.info('shutting down all browsers')
             this.process.kill()
         }
     }
@@ -163,7 +168,7 @@ export default class SeleniumStandaloneLauncher {
     }
 
     private handleSeleniumError(error: Error) {
-        log.error(error)
+        log.error('Selenium Standalone error', error)
         process.exit(1)
     }
 }

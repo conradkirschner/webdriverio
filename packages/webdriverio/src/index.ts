@@ -7,6 +7,8 @@ import { wrapCommand, runFnInFiberContext } from '@wdio/utils'
 import { Options, Capabilities } from '@wdio/types'
 import type * as WebDriverTypes from 'webdriver'
 
+import {  initialiseLauncherService } from '@wdio/utils/build/initialiseServices'
+
 import MultiRemote from './multiremote'
 import type ElementCommands from './commands/element'
 import SevereServiceErrorImport from './utils/SevereServiceError'
@@ -19,6 +21,7 @@ import {
 import type { Browser, MultiRemoteBrowser, AttachOptions } from './types'
 
 export type RemoteOptions = Options.WebdriverIO & Omit<Options.Testrunner, 'capabilities'>
+type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
 /**
  * A method to create a new session with WebdriverIO
@@ -31,6 +34,16 @@ export const remote = async function (params: RemoteOptions, remoteModifier?: Fu
     logger.setLogLevelsConfig(params.logLevels as any, params.logLevel)
 
     const config = validateConfig<RemoteOptions>(WDIO_DEFAULTS, params, Object.keys(DEFAULTS) as any)
+    /**
+     * Load services here
+     */
+    const { launcherServices } = initialiseLauncherService(config, [{ ...config.capabilities }] as Capabilities.DesiredCapabilities)
+    for (let i = 0; i < launcherServices.length; i++) {
+        console.info('Run onPrepare hook for ' + launcherServices[i].constructor.name)
+
+        // @ts-ignore
+        await launcherServices[i].onPrepare( { ...config.capabilities })
+    }
     const automationProtocol = await getAutomationProtocol(config)
     const modifier = (client: WebDriverTypes.Client, options: Options.WebdriverIO) => {
         /**
@@ -53,7 +66,7 @@ export const remote = async function (params: RemoteOptions, remoteModifier?: Fu
 
     params = Object.assign({}, detectBackend(params), params)
     await updateCapabilities(params, automationProtocol)
-    const instance: WebdriverIO.Browser = await ProtocolDriver.newSession(params, modifier, prototype, wrapCommand)
+    const instance: Writeable<WebdriverIO.Browser> = await ProtocolDriver.newSession(params, modifier, prototype, wrapCommand)
 
     /**
      * we need to overwrite the original addCommand and overwriteCommand
@@ -73,7 +86,27 @@ export const remote = async function (params: RemoteOptions, remoteModifier?: Fu
     }
 
     instance.addLocatorStrategy = addLocatorStrategyHandler(instance)
+
+    /**
+     * set hook for browser close event
+     **/
+    const closeSession = instance.deleteSession
+
+    const closeLauncherServices = async () => {
+        for (let i = 0; i < launcherServices.length; i++) {
+            console.info('Close Launcher Service ' + launcherServices[i].constructor.name)
+            if (launcherServices[i]){
+                if (launcherServices[i].onComplete){
+                    // @ts-ignore
+                    await launcherServices[i].onComplete()
+                }
+            }
+        }
+        await closeSession()
+    }
+    Object.assign(instance,  { deleteSession: closeLauncherServices })
     return instance
+
 }
 
 export const attach = async function (attachOptions: AttachOptions): Promise<Browser<'async'>> {
