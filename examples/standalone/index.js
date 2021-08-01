@@ -1,4 +1,4 @@
-const webdriver = require('../../packages/webdriverio/build/index')
+const webdriver = require('../../packages/webdriverio/build/index');
 // eslint-disable-next-line no-unexpected-multiline
 (async () => {
     const config = { drivers: { firefox: '0.29.1', chrome: true, chromiumedge: 'latest' }, args: { seleniumArgs: ['-port', '7777'] } }

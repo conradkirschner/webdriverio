@@ -24,6 +24,15 @@ export type RemoteOptions = Options.WebdriverIO & Omit<Options.Testrunner, 'capa
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
 /**
+ * A Storage of loaded Services
+ */
+const servicesLoaded: string[] = []
+
+/**
+ * A counter to detect any running browser session
+ */
+let browserInstances = 0
+/**
  * A method to create a new session with WebdriverIO
  *
  * @param  {Object} [params={}]       Options to create the session with
@@ -37,12 +46,16 @@ export const remote = async function (params: RemoteOptions, remoteModifier?: Fu
     /**
      * Load services here
      */
+    browserInstances = browserInstances + 1
     const { launcherServices } = initialiseLauncherService(config, [{ ...config.capabilities }] as Capabilities.DesiredCapabilities)
     for (let i = 0; i < launcherServices.length; i++) {
         console.info('Run onPrepare hook for ' + launcherServices[i].constructor.name)
-
-        // @ts-ignore
-        await launcherServices[i].onPrepare( { ...config.capabilities })
+        const currentLauncherService = launcherServices[i].constructor.name
+        if ( servicesLoaded.indexOf(currentLauncherService) === -1 ) {
+            servicesLoaded.push(currentLauncherService)
+            // @ts-ignore
+            await launcherServices[i].onPrepare( { ...config.capabilities })
+        }
     }
     const automationProtocol = await getAutomationProtocol(config)
     const modifier = (client: WebDriverTypes.Client, options: Options.WebdriverIO) => {
@@ -86,25 +99,31 @@ export const remote = async function (params: RemoteOptions, remoteModifier?: Fu
     }
 
     instance.addLocatorStrategy = addLocatorStrategyHandler(instance)
-
     /**
      * set hook for browser close event
      **/
     const closeSession = instance.deleteSession
 
     const closeLauncherServices = async () => {
-        for (let i = 0; i < launcherServices.length; i++) {
-            console.info('Close Launcher Service ' + launcherServices[i].constructor.name)
-            if (launcherServices[i]){
-                if (launcherServices[i].onComplete){
-                    // @ts-ignore
-                    await launcherServices[i].onComplete()
+        browserInstances = browserInstances - 1
+        if (browserInstances === 0) {
+            for (let i = 0; i < launcherServices.length; i++) {
+                console.info('Close Launcher Service ' + launcherServices[i].constructor.name)
+                if (launcherServices[i]){
+                    if (launcherServices[i].onComplete){
+                        // @ts-ignore
+                        await launcherServices[i].onComplete()
+                    }
                 }
             }
         }
         await closeSession()
     }
-    Object.assign(instance,  { deleteSession: closeLauncherServices })
+    Object.assign(instance,
+        {
+            deleteSession : closeLauncherServices
+        })
+    // Object.assign(instance,  { deleteSession: closeLauncherServices })
     return instance
 
 }
