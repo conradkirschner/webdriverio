@@ -123,7 +123,6 @@ export const remote = async function (params: RemoteOptions, remoteModifier?: Fu
         {
             deleteSession : closeLauncherServices
         })
-    // Object.assign(instance,  { deleteSession: closeLauncherServices })
     return instance
 
 }
